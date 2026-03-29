@@ -1,8 +1,20 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "friday"
 version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
+    "black>=26.3.1",
     "bub>=0.3.2",
 ]
+
+
+[project.entry-points."bub"]
+friday = "friday.plugin:friday_plugin"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
