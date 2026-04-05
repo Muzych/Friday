@@ -9,12 +9,21 @@ description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
     "black>=26.3.1",
-    "bub>=0.3.2",
+    "bub>=0.3.3",
+    "nmem-cli>=0.6.9",
+    "nowledge-mem-bub>=0.2.2",
+    "pydantic>=2.11.0",
+    "republic>=0.5.7",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
 ]
 
 
 [project.entry-points."bub"]
-friday = "friday.plugin:friday_plugin"
+friday = "friday.plugin:FridayPlugin"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
