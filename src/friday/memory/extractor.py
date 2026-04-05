@@ -2,7 +2,7 @@ import json
 from typing import Any
 
 from pydantic import BaseModel
-from republic import LLM, TapeEntry
+from republic import LLM, TapeEntry, schema_from_model
 
 from friday.memory.models import (
     DeepMemoryDelta,
@@ -10,6 +10,7 @@ from friday.memory.models import (
     SessionMemoryDelta,
     SessionMemorySnapshot,
 )
+from friday.output_cleaning import strip_think_blocks
 
 
 def parse_session_memory_delta(payload: dict[str, Any]) -> SessionMemoryDelta:
@@ -39,12 +40,12 @@ def render_entries_for_extraction(entries: list[TapeEntry]) -> str:
     for entry in entries:
         if entry.kind == "message":
             role = str(entry.payload.get("role", "unknown"))
-            content = str(entry.payload.get("content", "")).strip()
+            content = strip_think_blocks(str(entry.payload.get("content", "")).strip())
             if content:
                 rendered.append(f"{role}: {content}")
             continue
         if entry.kind == "system":
-            content = str(entry.payload.get("content", "")).strip()
+            content = strip_think_blocks(str(entry.payload.get("content", "")).strip())
             if content:
                 rendered.append(f"system: {content}")
     return "\n".join(rendered)
@@ -60,8 +61,9 @@ class MemoryExtractor:
         entries: list[TapeEntry],
         snapshot: SessionMemorySnapshot,
     ) -> SessionMemoryDelta:
-        return await self._extract_structured_json(
+        return await self._extract_via_tool(
             model_cls=SessionMemoryDelta,
+            tool_name="emit_session_memory_delta",
             system_prompt=_session_extractor_prompt(snapshot),
             transcript=render_entries_for_extraction(entries),
         )
@@ -73,26 +75,39 @@ class MemoryExtractor:
         session_snapshot: SessionMemorySnapshot,
         snapshot: DeepMemorySnapshot,
     ) -> DeepMemoryDelta:
-        return await self._extract_structured_json(
+        return await self._extract_via_tool(
             model_cls=DeepMemoryDelta,
+            tool_name="emit_deep_memory_delta",
             system_prompt=_deep_extractor_prompt(session_snapshot, snapshot),
             transcript=session_snapshot.model_dump_json(),
         )
 
-    async def _extract_structured_json(
+    async def _extract_via_tool(
         self,
         *,
         model_cls: type[BaseModel],
+        tool_name: str,
         system_prompt: str,
         transcript: str,
     ) -> BaseModel:
-        raw = await self._llm.chat_async(
+        calls = await self._llm.tool_calls_async(
             prompt=transcript,
             system_prompt=system_prompt,
-            response_format=model_cls,
+            tools=[schema_from_model(model_cls, name=tool_name)],
+            tool_choice={"type": "function", "function": {"name": tool_name}},
+            parallel_tool_calls=False,
+            temperature=0.1,
             max_tokens=800,
         )
-        return model_cls.model_validate_json(raw)
+        if not calls:
+            raise ValueError("memory extractor did not produce a structured tool call")
+        function = calls[0].get("function")
+        if not isinstance(function, dict):
+            raise ValueError("memory extractor returned an invalid tool call payload")
+        arguments = function.get("arguments")
+        if not isinstance(arguments, str):
+            raise ValueError("memory extractor returned tool arguments in an invalid format")
+        return model_cls.model_validate_json(arguments)
 
 
 def _session_extractor_prompt(snapshot: SessionMemorySnapshot) -> str:

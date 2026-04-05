@@ -36,6 +36,7 @@ class FakeChannelMessage:
     channel: str
     content: str
     chat_id: str | None = None
+    output_channel: str | None = None
 
 
 @pytest.mark.anyio
@@ -83,6 +84,7 @@ async def test_load_state_derives_chat_id_from_session_when_message_lacks_it():
         channel="telegram",
         content='{"message":"我回来啦","sender_id":"6732122782"}',
     )
+    message.output_channel = "null"
 
     state = await plugin.load_state(message=message, session_id="telegram:-1002175041416")
 

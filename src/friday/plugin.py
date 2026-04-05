@@ -12,6 +12,7 @@ from friday.memory.service import MemoryService
 from friday.memory_settings import resolve_memory_runtime_config
 from friday.message_context import parse_message_context
 from friday import nowledge_tools as _nowledge_tools
+from friday.output_cleaning import strip_think_blocks
 
 FRIDAY_BASE_PROMPT = """\
 You are Friday, a helpful Telegram group assistant.
@@ -83,6 +84,14 @@ class FridayPlugin:
             memory_prompt = str(friday_memory.get("rendered_prompt", "")).strip()
         parts = [memory_prompt, FRIDAY_BASE_PROMPT]
         return "\n\n".join(part for part in parts if part)
+
+    @hookimpl
+    async def dispatch_outbound(self, message):
+        if hasattr(message, "content"):
+            message.content = strip_think_blocks(str(message.content))
+        elif isinstance(message, dict) and "content" in message:
+            message["content"] = strip_think_blocks(str(message["content"]))
+        return False
 
     @hookimpl
     def register_cli_commands(self, app):

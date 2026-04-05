@@ -54,21 +54,30 @@ def test_decode_json_object_accepts_markdown_fenced_json():
 
 
 class FakeLLM:
-    def __init__(self, response_text: str):
-        self.response_text = response_text
+    def __init__(self, calls):
+        self.calls = calls
         self.kwargs = None
 
-    async def chat_async(self, **kwargs):
+    async def tool_calls_async(self, **kwargs):
         self.kwargs = kwargs
-        return self.response_text
+        return self.calls
 
 
 @pytest.mark.anyio
-async def test_extract_deep_delta_uses_response_format_schema():
+async def test_extract_deep_delta_uses_named_tool_call():
     llm = FakeLLM(
-        '{"profile_facts":["User is building Friday."],'
-        '"preferences":[],"long_running_projects":["Friday"],'
-        '"stable_workflows":["Uses Bub"]}'
+        [
+            {
+                "function": {
+                    "name": "emit_deep_memory_delta",
+                    "arguments": (
+                        '{"profile_facts":["User is building Friday."],'
+                        '"preferences":[],"long_running_projects":["Friday"],'
+                        '"stable_workflows":["Uses Bub"]}'
+                    ),
+                }
+            }
+        ]
     )
     extractor = MemoryExtractor(llm)
 
@@ -79,4 +88,9 @@ async def test_extract_deep_delta_uses_response_format_schema():
     )
 
     assert delta.long_running_projects == ["Friday"]
-    assert llm.kwargs["response_format"] is DeepMemoryDelta
+    assert llm.kwargs["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "emit_deep_memory_delta"},
+    }
+    assert llm.kwargs["parallel_tool_calls"] is False
+    assert llm.kwargs["temperature"] == 0.1
