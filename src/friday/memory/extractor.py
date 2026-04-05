@@ -1,9 +1,8 @@
 import json
-from dataclasses import asdict
 from typing import Any
 
 from pydantic import BaseModel
-from republic import LLM, TapeEntry, schema_from_model
+from republic import LLM, TapeEntry
 
 from friday.memory.models import (
     DeepMemoryDelta,
@@ -61,13 +60,11 @@ class MemoryExtractor:
         entries: list[TapeEntry],
         snapshot: SessionMemorySnapshot,
     ) -> SessionMemoryDelta:
-        payload = await self._extract_via_tool(
+        return await self._extract_structured_json(
             model_cls=SessionMemoryDelta,
-            tool_name="emit_session_memory_delta",
             system_prompt=_session_extractor_prompt(snapshot),
             transcript=render_entries_for_extraction(entries),
         )
-        return parse_session_memory_delta(payload)
 
     async def extract_deep_delta(
         self,
@@ -76,38 +73,26 @@ class MemoryExtractor:
         session_snapshot: SessionMemorySnapshot,
         snapshot: DeepMemorySnapshot,
     ) -> DeepMemoryDelta:
-        payload = await self._extract_via_tool(
+        return await self._extract_structured_json(
             model_cls=DeepMemoryDelta,
-            tool_name="emit_deep_memory_delta",
             system_prompt=_deep_extractor_prompt(session_snapshot, snapshot),
             transcript=session_snapshot.model_dump_json(),
         )
-        return parse_deep_memory_delta(payload)
 
-    async def _extract_via_tool(
+    async def _extract_structured_json(
         self,
         *,
         model_cls: type[BaseModel],
-        tool_name: str,
         system_prompt: str,
         transcript: str,
-    ) -> dict[str, Any]:
-        calls = await self._llm.tool_calls_async(
+    ) -> BaseModel:
+        raw = await self._llm.chat_async(
             prompt=transcript,
             system_prompt=system_prompt,
-            tools=[schema_from_model(model_cls, name=tool_name)],
+            response_format=model_cls,
             max_tokens=800,
         )
-        if not calls:
-            raise ValueError("memory extractor did not produce a structured tool call")
-        function = calls[0].get("function")
-        if not isinstance(function, dict):
-            raise ValueError("memory extractor returned an invalid tool call payload")
-        arguments = function.get("arguments")
-        if not isinstance(arguments, str):
-            raise ValueError("memory extractor returned tool arguments in an invalid format")
-        payload = json.loads(arguments)
-        return payload
+        return model_cls.model_validate_json(raw)
 
 
 def _session_extractor_prompt(snapshot: SessionMemorySnapshot) -> str:

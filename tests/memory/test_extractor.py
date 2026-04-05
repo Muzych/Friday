@@ -1,8 +1,12 @@
+import pytest
+
 from friday.memory.extractor import (
+    MemoryExtractor,
     decode_json_object,
     parse_deep_memory_delta,
     parse_session_memory_delta,
 )
+from friday.memory.models import DeepMemoryDelta, DeepMemorySnapshot, SessionMemorySnapshot
 
 
 def test_parse_session_memory_delta_from_model_json():
@@ -47,3 +51,32 @@ def test_decode_json_object_accepts_markdown_fenced_json():
     payload = decode_json_object(raw)
 
     assert payload["goal"] == "Implement Friday memory"
+
+
+class FakeLLM:
+    def __init__(self, response_text: str):
+        self.response_text = response_text
+        self.kwargs = None
+
+    async def chat_async(self, **kwargs):
+        self.kwargs = kwargs
+        return self.response_text
+
+
+@pytest.mark.anyio
+async def test_extract_deep_delta_uses_response_format_schema():
+    llm = FakeLLM(
+        '{"profile_facts":["User is building Friday."],'
+        '"preferences":[],"long_running_projects":["Friday"],'
+        '"stable_workflows":["Uses Bub"]}'
+    )
+    extractor = MemoryExtractor(llm)
+
+    delta = await extractor.extract_deep_delta(
+        entries=[],
+        session_snapshot=SessionMemorySnapshot(session_id="telegram:1", summary="Working on Friday memory"),
+        snapshot=DeepMemorySnapshot(actor_key="telegram:user"),
+    )
+
+    assert delta.long_running_projects == ["Friday"]
+    assert llm.kwargs["response_format"] is DeepMemoryDelta

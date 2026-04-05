@@ -36,7 +36,7 @@ class FakeExtractor:
 @pytest.mark.anyio
 async def test_update_memories_reads_only_entries_after_last_anchor(tmp_path):
     tape_store = InMemoryTapeStore()
-    llm = LLM(model="anthropic:MiniMax-M2.7", tape_store=tape_store)
+    llm = LLM(model="openai:MiniMax-M2.7", tape_store=tape_store)
     extractor = FakeExtractor()
     service = MemoryService(
         root=tmp_path,
@@ -78,7 +78,7 @@ async def test_update_memories_reads_only_entries_after_last_anchor(tmp_path):
 @pytest.mark.anyio
 async def test_load_context_renders_session_and_deep_memory(tmp_path):
     tape_store = InMemoryTapeStore()
-    llm = LLM(model="anthropic:MiniMax-M2.7", tape_store=tape_store)
+    llm = LLM(model="openai:MiniMax-M2.7", tape_store=tape_store)
     service = MemoryService(
         root=tmp_path,
         workspace=tmp_path,
@@ -108,7 +108,7 @@ async def test_load_context_renders_session_and_deep_memory(tmp_path):
 @pytest.mark.anyio
 async def test_rebuild_session_memory_processes_entries_in_chunks(tmp_path):
     tape_store = InMemoryTapeStore()
-    llm = LLM(model="anthropic:MiniMax-M2.7", tape_store=tape_store)
+    llm = LLM(model="openai:MiniMax-M2.7", tape_store=tape_store)
     extractor = FakeExtractor()
     service = MemoryService(
         root=tmp_path,

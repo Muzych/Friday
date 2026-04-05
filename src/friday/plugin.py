@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from bub import hookimpl
+from bub.envelope import content_of, field_of
 from bub.builtin.settings import load_settings
+from loguru import logger
 
 from friday.cli import register_memory_commands
 from friday.memory.service import MemoryService
+from friday.memory_settings import resolve_memory_runtime_config
 from friday.message_context import parse_message_context
+from friday import nowledge_tools as _nowledge_tools
 
 FRIDAY_BASE_PROMPT = """\
 You are Friday, a helpful Telegram group assistant.
@@ -32,13 +35,14 @@ class FridayPlugin:
         if tape_store is None:
             return None
         settings = load_settings()
+        memory_config = resolve_memory_runtime_config()
         return MemoryService.from_runtime(
             root=settings.home / "friday_memory",
             workspace=self.framework.workspace,
-            model=settings.model,
-            api_key=settings.api_key,
-            api_base=settings.api_base,
-            api_format=settings.api_format,
+            model=memory_config.model,
+            api_key=memory_config.api_key,
+            api_base=memory_config.api_base,
+            api_format=memory_config.api_format,
             tape_store=tape_store,
             context=self.framework.build_tape_context(),
         )
@@ -63,10 +67,13 @@ class FridayPlugin:
             return
         context_data = state.get("friday_message_context")
         actor_key = context_data.get("actor_key") if isinstance(context_data, dict) else None
-        await self.memory_service.update_memories(
-            session_id=session_id,
-            actor_key=actor_key,
-        )
+        try:
+            await self.memory_service.update_memories(
+                session_id=session_id,
+                actor_key=actor_key,
+            )
+        except Exception as exc:
+            logger.warning("friday memory update failed: {}", exc)
 
     @hookimpl
     def system_prompt(self, prompt, state):
@@ -82,10 +89,11 @@ class FridayPlugin:
         if self.memory_service is not None:
             register_memory_commands(app, self.memory_service)
 
-    def _parse_context(self, message: dict[str, Any], session_id: str):
-        channel = str(message.get("channel", "default"))
-        chat_id = str(message.get("chat_id", "default"))
-        raw_content = str(message.get("content", ""))
+    def _parse_context(self, message: Any, session_id: str):
+        channel = str(field_of(message, "channel", "default"))
+        raw_chat_id = field_of(message, "chat_id")
+        chat_id = str(raw_chat_id) if raw_chat_id is not None else session_id.split(":", 1)[-1]
+        raw_content = content_of(message)
         return parse_message_context(
             channel=channel,
             session_id=session_id,
