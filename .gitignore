@@ -1,7 +1,0 @@
-.DS_Store
-.env
-*.egg-info/
-__pycache__/
-.uv-cache/
-.venv/
-.idea/
