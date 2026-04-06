@@ -1,5 +1,4 @@
-import json
-from typing import Any
+from typing import TypeVar
 
 from pydantic import BaseModel
 from republic import LLM, TapeEntry, schema_from_model
@@ -13,41 +12,21 @@ from friday.memory.models import (
 from friday.output_cleaning import strip_think_blocks
 
 
-def parse_session_memory_delta(payload: dict[str, Any]) -> SessionMemoryDelta:
-    return SessionMemoryDelta.model_validate(payload)
-
-
-def parse_deep_memory_delta(payload: dict[str, Any]) -> DeepMemoryDelta:
-    return DeepMemoryDelta.model_validate(payload)
-
-
-def decode_json_object(raw: str) -> dict[str, Any]:
-    decoder = json.JSONDecoder()
-    for start, char in enumerate(raw):
-        if char != "{":
-            continue
-        try:
-            payload, end = decoder.raw_decode(raw[start:])
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            return payload
-    raise json.JSONDecodeError("No JSON object found", raw, 0)
+ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 def render_entries_for_extraction(entries: list[TapeEntry]) -> str:
     rendered: list[str] = []
     for entry in entries:
         if entry.kind == "message":
-            role = str(entry.payload.get("role", "unknown"))
-            content = strip_think_blocks(str(entry.payload.get("content", "")).strip())
-            if content:
-                rendered.append(f"{role}: {content}")
+            label = str(entry.payload.get("role", "unknown"))
+        elif entry.kind == "system":
+            label = "system"
+        else:
             continue
-        if entry.kind == "system":
-            content = strip_think_blocks(str(entry.payload.get("content", "")).strip())
-            if content:
-                rendered.append(f"system: {content}")
+        content = strip_think_blocks(str(entry.payload.get("content", "")))
+        if content:
+            rendered.append(f"{label}: {content}")
     return "\n".join(rendered)
 
 
@@ -85,11 +64,11 @@ class MemoryExtractor:
     async def _extract_via_tool(
         self,
         *,
-        model_cls: type[BaseModel],
+        model_cls: type[ModelT],
         tool_name: str,
         system_prompt: str,
         transcript: str,
-    ) -> BaseModel:
+    ) -> ModelT:
         calls = await self._llm.tool_calls_async(
             prompt=transcript,
             system_prompt=system_prompt,
