@@ -1,19 +1,22 @@
 [project]
 name = "friday"
 version = "0.1.0"
-description = "A Telegram bot built on BUB."
+description = "A Bub-powered agent workspace."
 readme = "README.md"
 authors = [
     { name = "Muzych", email = "haxk1024@gmail.com" }
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "bub>=0.3.3",
+    "bub>=0.3.9",
 ]
 
 [project.scripts]
 friday = "friday:main"
 
+[project.entry-points."bub"]
+friday = "friday.plugin:friday_plugin"
+
 [build-system]
-requires = ["uv_build>=0.9.8,<0.10.0"]
+requires = ["uv_build>=0.11.6,<0.12.0"]
 build-backend = "uv_build"

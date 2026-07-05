@@ -1,10 +1,12 @@
 .DS_Store
 .env
 .env.*
+!.env.example
 .idea/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.bub/
 .coverage
 .coverage.*
 .venv/
